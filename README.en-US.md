@@ -4,20 +4,20 @@ A universal AI runtime and training backend based on deep learning and reinforce
 
 Its design goal is to be used for various fitting tasks, thus it needs to ensure the trained models possess as high robustness as possible with as few datasets as possible.
 
-* [English](./README.en-us.md)
+* [English](./README.en-US.md)
 * [中文](./README.md)
 
 ## Contents
 
-- [Quick Start](#Quick Start)
+- [Quick Start](#Quick-Start)
     * [Installation](#Installation)
-    * [Install Dependencies](#Install Dependencies)
-    * [Set Environment Variables](#Set Environment Variables)
+    * [Install Dependencies](#Install-Dependencies)
+    * [Set Environment Variables](#Set-Environment-Variables)
     * [Launch](#Launch)
-- [Docker Build](#Docker Build)
-- [Copyright Notice](#Copyright Notice)
+- [Docker Build](#Docker-Build)
+- [Copyright-Notice](#Copyright-Notice)
 
-## Quick Start
+## Quick-Start
 
 ### Installation
 
@@ -25,13 +25,13 @@ Its design goal is to be used for various fitting tasks, thus it needs to ensure
 git clone git@github.com:cpcgskill/sgt.git
 ```
 
-### Install Dependencies
+### Install-Dependencies
 
 ```commandline
 pip install -r requirements.txt
 ```
 
-### Set Environment Variables
+### Set-Environment-Variables
 
 Windows
 
@@ -57,10 +57,10 @@ export mongodb_database_url "your_mongodb_database_url"
 python main.py
 ```
 
-## Docker Build
+## Docker-Build
 
 Pay attention to the "RUN pip install -r requirements.txt -i https://pypi.douban.com/simple" part in the Dockerfile, as it specifies a CDN within China. If you are not Chinese or are not in China, it may cause problems.
 
-## Copyright Notice
+## Copyright-Notice
 
 This project has signed an Apache-2.0 license, for details please refer to the LICENSE.

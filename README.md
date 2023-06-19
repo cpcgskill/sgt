@@ -4,7 +4,7 @@
 
 它的设计目标是用于各种拟合任务，因此它需要让训练出来的模型拥有尽可能高的鲁棒性的同时需要尽可能少的数据集。
 
-* [English](./README.en-us.md)
+* [English](./README.en-US.md)
 * [中文](./README.md)
 
 ## 目录
