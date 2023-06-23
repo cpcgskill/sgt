@@ -37,18 +37,21 @@ Windows
 
 ```commandline
 set mongodb_database_url "your_mongodb_database_url"
+set sgtone_key "your_key"
 ```
 
 Linux
 
 ```commandline
 export mongodb_database_url "your_mongodb_database_url"
+export sgtone_key "your_key"
 ```
 
 MacOS(ps: 我不熟悉MacOS)
 
 ```commandline
 export mongodb_database_url "your_mongodb_database_url"
+export sgtone_key "your_key"
 ```
 
 ### 启动
