@@ -8,28 +8,24 @@
 :aboutcg: https://www.aboutcg.org/teacher/54335
 :bilibili: https://space.bilibili.com/351598127
 :爱发电: https://afdian.net/@Phantom_of_the_Cang
-
 """
 from __future__ import unicode_literals, print_function, division
 
-import os
 from typing import *
 
+import os
+import uuid
 import datetime
-import hashlib
-import hmac
 
 from bson import ObjectId
 from flask import jsonify, request, Blueprint
 import torch
 
-from sgtone.model import SGTModule
-from sgtone.utils import string_to_datetime, datetime_to_string, connect_to_database, with_write_only_collection, \
-    with_read_only_collection, initialize_database
+from sgt.model import SGTModule
+from sgt.db import with_write_only_collection, with_read_only_collection
+import sgt.utils as utils
 
-initialize_database()
-
-bp = Blueprint('sgtone', __name__)
+bp = Blueprint('sgt', __name__)
 
 
 class KnowException(Exception): pass
@@ -60,20 +56,23 @@ def check_auth() -> AnyStr:
     """
     :return: 用户的唯一id
     """
-    if 'auth_token' not in request.json:
-        # exception
-        raise AuthException('auth token is required')
-    auth_token = request.json['auth_token']
-    with with_read_only_collection('auth_token') as collection:
-        doc = collection.find_one({'token': auth_token})
+    if 'secret_id' not in request.json:
+        raise AuthException('secret_id is required')
+    secret_id = request.json['secret_id']
+    if 'secret_key' not in request.json:
+        raise AuthException('secret_key is required')
+    secret_key = request.json['secret_key']
+    with with_read_only_collection('secret') as collection:
+        doc = collection.find_one({'secret_id': secret_id, 'secret_key': secret_key})
         if doc is None:
-            raise AuthException('auth token is error')
+            raise AuthException('secret is error')
         if 'end_time' in doc:
             if datetime.datetime.now() > doc['end_time']:
                 # exception
-                raise AuthException('auth token has expired')
-        new_auth_token = hmac.new(key.encode('utf-8'), auth_token.encode('utf-8'), hashlib.sha256).hexdigest()
-        return new_auth_token
+                raise AuthException('secret has expired')
+        # new_auth_token = hmac.new(key.encode('utf-8'), auth_token.encode('utf-8'), hashlib.sha256).hexdigest()
+        # return new_auth_token
+        return doc['secret_id']
 
 
 @bp.route('/private/update_auth_token', methods=['POST'])
@@ -81,13 +80,23 @@ def update_auth_token_route():
     # 获取输入数据
     if request.json['key'] != key:
         raise AuthException('wrong key')
-    token = request.json['token']
-    end_time = string_to_datetime(request.json['end_time'])
-    with with_write_only_collection('auth_token') as collection:
+    #
+    secret_id = request.json['secret_id']
+    secret_key = request.json['secret_key']
+    # 简介, 默认为空
+    doc = str(request.json.get('doc', ''))
+    # 有效期
+    end_time = request.json['end_time']
+    end_time = datetime.datetime.strptime(end_time, '%Y-%m-%d %H:%M:%S')
+    with with_write_only_collection('secret') as collection:
         collection.update_one(
-            {'token': token},
+            {
+                'secret_id': secret_id,
+                'secret_key': secret_key,
+            },
             {
                 '$set': {
+                    'doc': doc,
                     'end_time': end_time
                 }
             },
@@ -117,29 +126,35 @@ def create_sgt_model_route():
         # 获取输入数据
         user_unique_id = check_auth()
         name = str(request.json['name'])
+        app_name = str(request.json['app_name'])
         client_data = request.json['client_data']
         in_size = request.json['in_size']
         out_size = request.json['out_size']
         is_public = bool(request.json['is_public'])
 
         # 检查模型是否存在
-        if 0 < collection.count_documents({'user_unique_id': user_unique_id, 'name': name}):
+        if 0 < collection.count_documents({'user_unique_id': user_unique_id, 'name': name, 'app_name': app_name}):
             raise CreateWeightsNetException('model already exists')
 
         model = SGTModule.auto_create(in_size, out_size)
         model.initialize_weights()
 
+        # 保存模型
+        checkpoint_file_id = utils.save_checkpoint_to_gridfs(model)
+
+        # set to database
         collection.update_one(
             {
                 'user_unique_id': user_unique_id,
                 'name': name,
+                'app_name': app_name,
             },
             {
                 '$set': {
                     'client_data': client_data,
                     'in_size': in_size,
                     'out_size': out_size,
-                    'checkpoint': model.create_checkpoint_buffer(),
+                    'checkpoint_file_id': checkpoint_file_id,
                     'is_public': is_public,
                 }
             },
@@ -153,15 +168,16 @@ def create_sgt_model_route():
 class FindModelException(KnowException): pass
 
 
-def find_model(user_unique_id, name):
+def find_model(user_unique_id, name, app_name):
     with with_read_only_collection('checkpoint') as collection:
         # 检查模型是否存在
-        if collection.count_documents({'user_unique_id': user_unique_id, 'name': name}) < 1:
+        if collection.count_documents({'user_unique_id': user_unique_id, 'name': name, 'app_name': app_name}) < 1:
             raise FindModelException('model does not exist')
         # 查找模型
         doc = collection.find_one({
             'user_unique_id': user_unique_id,
             'name': name,
+            'app_name': app_name,
         })
         return doc
 
@@ -171,14 +187,16 @@ def delete_sgt_model_route():
     # 获取输入数据
     user_unique_id = check_auth()
     name = str(request.json['name'])
+    app_name = str(request.json['app_name'])
 
     # 检查模型是否存在
-    _ = find_model(user_unique_id, name)
+    doc = find_model(user_unique_id, name, app_name)
 
     with with_write_only_collection('checkpoint') as collection:
-        collection.delete_one({'user_unique_id': user_unique_id, 'name': name})
-        # 返回 JSON 结果
-        return jsonify(None)
+        collection.delete_one({'user_unique_id': user_unique_id, 'name': name, 'app_name': app_name})
+    utils.remove_checkpoint_from_gridfs(doc['checkpoint_file_id'])
+    # 返回 JSON 结果
+    return jsonify(None)
 
 
 @bp.route('/public/update_sgt_model_client_data', methods=['POST'])
@@ -186,16 +204,18 @@ def update_sgt_model_client_data_route():
     # 获取输入数据
     user_unique_id = check_auth()
     name = str(request.json['name'])
+    app_name = str(request.json['app_name'])
     client_data = request.json['client_data']
 
     # 检查模型是否存在
-    _ = find_model(user_unique_id, name)
+    _ = find_model(user_unique_id, name, app_name)
 
     with with_write_only_collection('checkpoint') as collection:
         collection.update_one(
             {
                 'user_unique_id': user_unique_id,
                 'name': name,
+                'app_name': app_name,
             },
             {
                 '$set': {
@@ -248,26 +268,31 @@ def clone_sgt_model_to_mine_route():
         # 获取输入数据
         user_unique_id = check_auth()
         new_name = str(request.json['new_name'])
+        app_name = str(request.json['app_name'])
         author_unique_id = str(request.json['author_unique_id'])
         name = str(request.json['name'])
 
         # 检查模型是否存在
-        if 0 < collection.count_documents({'user_unique_id': user_unique_id, 'name': new_name}):
+        if 0 < collection.count_documents({'user_unique_id': user_unique_id, 'name': new_name, 'app_name': app_name}):
             raise CloneWeightsNetToMineException('model already exists')
 
-        doc = collection.find_one({'user_unique_id': author_unique_id, 'name': name})
+        doc = collection.find_one({'user_unique_id': author_unique_id, 'name': name, 'app_name': app_name})
+        # doc = find_model(author_unique_id, name, app_name)
+
+        new_checkpoint_file_id = utils.clone_checkpoint_to_gridfs(doc['checkpoint_file_id'])
 
         collection.update_one(
             {
                 'user_unique_id': user_unique_id,
                 'name': new_name,
+                'app_name': app_name,
             },
             {
                 '$set': {
                     'client_data': doc['client_data'],
                     'in_size': doc['in_size'],
                     'out_size': doc['out_size'],
-                    'checkpoint': doc['checkpoint'],
+                    'checkpoint_file_id': new_checkpoint_file_id,
                     'is_public': doc['is_public'],
                 }
             },
@@ -286,6 +311,7 @@ def run_sgt_model_route():
     # 获取输入数据
     user_unique_id = check_auth()
     name = str(request.json['name'])
+    app_name = str(request.json['app_name'])
     data = request.json['data']
 
     if len(data) == 0:
@@ -293,12 +319,13 @@ def run_sgt_model_route():
     if len(set((len(d) for d in data))) > 1:
         raise RunWeightsNetException('The length of data is inconsistent')
 
-    doc = find_model(user_unique_id, name)
+    doc = find_model(user_unique_id, name, app_name)
 
     if len(data[0]) != doc['in_size']:
-        raise RunWeightsNetException('data length not equal sgt_model in_size')
+        raise RunWeightsNetException('Data length not equal sgt_model in_size')
 
-    model = SGTModule.create_from_checkpoint_buffer(doc['checkpoint'])
+    model = utils.load_checkpoint_from_gridfs(SGTModule, doc['checkpoint_file_id'])
+
     out_data = model.run(torch.Tensor(data))
     # 返回 JSON 结果
     return jsonify(out_data.tolist())
@@ -312,9 +339,10 @@ def upload_sgt_model_train_data_route():
     # 获取输入数据
     user_unique_id = check_auth()
     name = str(request.json['name'])
+    app_name = str(request.json['app_name'])
     data = request.json['train_data']
 
-    doc = find_model(user_unique_id, name)
+    doc = find_model(user_unique_id, name, app_name)
     if len(data) == 0:
         return jsonify({'result': None})
     if len(set(((len(d), len(l)) for d, l in data))) > 1:

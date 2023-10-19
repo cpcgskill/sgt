@@ -22,8 +22,10 @@ import cachetools
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
-from sgtone.model import SGTModule
-from sgtone.utils import make_device, with_read_only_collection, with_write_only_collection
+from sgt.model import SGTModule
+from sgt.db import with_read_only_collection, with_write_only_collection
+from sgt.utils import make_device
+import sgt.utils as utils
 
 # batch_size = 8192
 # save_interval = 8
@@ -94,7 +96,7 @@ def train_model(checkpoint_id):
         time.sleep(fail_sleep_seconds)
         return
 
-    model = SGTModule.create_from_checkpoint_buffer(doc['checkpoint'])
+    model = utils.load_checkpoint_from_gridfs(SGTModule, doc['checkpoint_file_id'])
 
     data_iter = load_data(checkpoint_id)
     if data_iter is None:
@@ -111,19 +113,27 @@ def train_model(checkpoint_id):
             if torch.max(model.train(x, y).data) < 0.01:
                 break
 
-        with with_write_only_collection('checkpoint') as collection:
+        with with_read_only_collection('checkpoint') as collection:
             if collection.count_documents({'_id': checkpoint_id}) < 1:
                 return
-            collection.update_one(
-                {
-                    '_id': checkpoint_id,
-                },
-                {
-                    '$set': {
-                        'checkpoint': model.create_checkpoint_buffer(),
-                    }
-                },
-            )
+        new_checkpoint_file_id = utils.save_checkpoint_to_gridfs(model)
+        try:
+            with with_write_only_collection('checkpoint') as collection:
+                collection.update_one(
+                    {
+                        '_id': checkpoint_id,
+                    },
+                    {
+                        '$set': {
+                            'checkpoint_file_id': new_checkpoint_file_id,
+                        }
+                    },
+                )
+        except:
+            utils.remove_checkpoint_from_gridfs(new_checkpoint_file_id)
+            raise
+        else:
+            utils.remove_checkpoint_from_gridfs(doc['checkpoint_file_id'])
 
 
 def train_all_model():

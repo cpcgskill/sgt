@@ -14,9 +14,9 @@ from __future__ import unicode_literals, print_function, division
 
 
 def main():
-    import sgtone.train
+    import sgt.train
 
-    sgtone.train.main()
+    sgt.train.main()
 
 
 if __name__ == '__main__':

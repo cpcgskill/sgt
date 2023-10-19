@@ -15,17 +15,26 @@ from __future__ import unicode_literals, print_function, division
 if False:
     from typing import *
 import requests
+import uuid
 import datetime
+import time
 
-root_url = 'http://localhost:8000/sgtone'
-test_auth_token = 'test'
+root_url = 'http://localhost:8000/sgt'
+
+test_secret_id = f'test_{uuid.uuid4().hex}'
+test_secret_key = f'test_{uuid.uuid4().hex}'
+
+test_model_name = f'test_{uuid.uuid4().hex}'
+test_input_size = 2048
+test_output_size = 128
 
 # test private
 res = requests.post(
     root_url + '/private/update_auth_token',
     json={
         'key': 'test_sgtone_key',
-        'token': test_auth_token,
+        'secret_id': test_secret_id,
+        'secret_key': test_secret_key,
         'end_time': (datetime.datetime.now() + datetime.timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S'),
     }
 ).json()
@@ -36,16 +45,17 @@ test_list = [
     {
         'url': '/public/check_auth_token',
         'json': {
-            'auth_token': test_auth_token,
+            'secret_id': test_secret_id,
+            'secret_key': test_secret_key,
         },
     },
     {
         'url': '/public/create_sgt_model',
         'json': {
-            'name': 'test',
+            'name': test_model_name,
             'client_data': {},
-            'in_size': 64,
-            'out_size': 4,
+            'in_size': test_input_size,
+            'out_size': test_output_size,
             'is_public': True,
         },
     },
@@ -61,30 +71,37 @@ test_list = [
         'url': '/public/clone_sgt_model_to_mine',
         'json': {
             'new_name': 'test2',
-            'author_unique_id': 'test',
-            'name': 'test',
+            'author_unique_id': test_secret_id,
+            'name': test_model_name,
         },
     },  # the case unable to pass
     {
         'url': '/public/run_sgt_model',
         'json': {
-            'name': 'test',
-            'data': [[1] * 64, [2] * 64, [3] * 64],
+            'name': test_model_name,
+            'data': [[1] * test_input_size]*1024,
         },
     },
     {
         'url': '/public/upload_sgt_model_train_data',
         'json': {
-            'name': 'test',
-            'train_data': [[[1] * 64, [1] * 4], [[2] * 64, [2] * 4], [[3] * 64, [3] * 4]],
+            'name': test_model_name,
+            'train_data': [[[1] * test_input_size, [1] * test_output_size]]*1024,
         },
     },
 ]
 for i in test_list:
     url = root_url + i['url']
     print('test: {}'.format(url))
+    start_time = time.time()
     res = requests.post(
         url,
-        json=i['json'] | {'auth_token': test_auth_token}
+        json=i['json'] | {
+            'secret_id': test_secret_id,
+            'secret_key': test_secret_key,
+            'app_name': 'test',
+        }
     ).json()
-    print('result: {}'.format(res))
+    end_time = time.time()
+    print('result: {}'.format(res)[:100])
+    print('time: {}'.format(end_time - start_time))

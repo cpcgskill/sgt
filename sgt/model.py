@@ -104,7 +104,13 @@ class ASGTModule(object):
         model.optimizer.load_state_dict(checkpoint['optimizer'])
         return model
 
+    def run(self, x):
+        with torch.no_grad():
+            self.net.eval()
+            return self.net(x)
+
     def train(self, x, y):
+        self.net.train()
         self.optimizer.zero_grad()
         output = self.net(x)
         this_loss = self.loss_function(output, y)
@@ -147,39 +153,28 @@ class SGTModule(object):
                 model_config.append(out_size)
         else:
             model_config.append(out_size)
-        return SGTModule([ASGTModule(model_config) for _ in range(max(model_count, 1))])
+        return SGTModule([ASGTModule(model_config) for _ in range(max(model_count, 1))]).initialize_weights()
 
     def initialize_weights(self):
         for i in self.model_list:
             i.initialize_weights(std=0.3)
         return self
 
-    def create_checkpoint(self):
+    def to_checkpoint(self):
         return {
             'model_list': [i.create_checkpoint() for i in self.model_list],
             'training_count': self.training_count,
             'choose_step_size': self.choose_step_size,
         }
 
-    def create_checkpoint_buffer(self):
-        buf = io.BytesIO()
-        torch.save(self.create_checkpoint(), buf)
-        buf = buf.getvalue()
-        return buf
-
     @staticmethod
-    def create_from_checkpoint(checkpoint):
+    def from_checkpoint(checkpoint):
         model = SGTModule(
             model_list=[ASGTModule.create_from_checkpoint(i) for i in checkpoint['model_list']],
             choose_step_size=checkpoint['choose_step_size'],
         )
         model.training_count = checkpoint['training_count']
         return model
-
-    @staticmethod
-    def create_from_checkpoint_buffer(checkpoint_buffer):
-        checkpoint = torch.load(io.BytesIO(checkpoint_buffer))
-        return SGTModule.create_from_checkpoint(checkpoint)
 
     def run(self, x):
         model = random.choice(self.model_list)

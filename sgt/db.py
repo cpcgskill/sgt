@@ -1,6 +1,6 @@
 # -*-coding:utf-8 -*-
 """
-:创建时间: 2023/2/14 15:00
+:创建时间: 2023/10/12 2:43
 :作者: 苍之幻灵
 :我的主页: https://cpcgskill.com
 :Github: https://github.com/cpcgskill
@@ -10,32 +10,18 @@
 :爱发电: https://afdian.net/@Phantom_of_the_Cang
 
 """
-from __future__ import unicode_literals, print_function, division
 
+import io
+from typing import *
 import datetime
-
-if False:
-    from typing import *
+import uuid
 import os
 import contextlib
 from threading import Lock
 from readerwriterlock import rwlock
 
 import pymongo
-import torch
-
-
-def string_to_datetime(s):
-    return datetime.datetime.strptime(s, '%Y-%m-%d %H:%M:%S')
-
-
-def datetime_to_string(d):
-    return d.strftime('%Y-%m-%d %H:%M:%S')
-
-
-def make_device():
-    return torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
+import gridfs
 
 client = pymongo.MongoClient(os.environ['mongodb_database_url'])
 
@@ -46,12 +32,16 @@ def connect_to_database():
     return database
 
 
+def get_grid_fs_bucket():
+    return gridfs.GridFSBucket(connect_to_database())
+
+
 def get_collection(name):
     return connect_to_database().get_collection(name)
 
 
 _lock_table_lock = Lock()
-_rwlock_table = dict()  # type: Dict[AnyStr, rwlock.RWLockFair]
+_rwlock_table: Dict[AnyStr, rwlock.RWLockFair] = dict()
 
 
 # _rlock_table = dict()  # type: Dict[AnyStr, RLock]
@@ -92,13 +82,26 @@ def with_read_only_collection(name):
 def initialize_database():
     db = connect_to_database()
     collection_names = db.list_collection_names()
-    if not 'auth_token' in collection_names:
-        collection = db.create_collection('auth_token')
+    if not 'secret' in collection_names:
+        collection = db.create_collection('secret')
         collection.create_index('end_time')
         collection.create_index('token')
     if not 'checkpoint' in collection_names:
         collection = db.create_collection('checkpoint')
+        collection.create_index('user_unique_id')
+        collection.create_index('name')
+        collection.create_index('app_name')
+
     if not 'data' in collection_names:
         collection = db.create_collection('data')
         collection.create_index('checkpoint_id')
         collection.create_index('user_unique_id')
+
+
+__all__ = [
+    'get_grid_fs_bucket',
+    'get_collection',
+    'with_write_only_collection',
+    'with_read_only_collection',
+    'initialize_database',
+]
