@@ -36,6 +36,10 @@ def get_grid_fs_bucket():
     return gridfs.GridFSBucket(connect_to_database())
 
 
+def get_grid_fs():
+    return gridfs.GridFS(connect_to_database())
+
+
 def get_collection(name):
     return connect_to_database().get_collection(name)
 
@@ -46,37 +50,37 @@ _rwlock_table: Dict[AnyStr, rwlock.RWLockFair] = dict()
 
 # _rlock_table = dict()  # type: Dict[AnyStr, RLock]
 
-
-@contextlib.contextmanager
-def with_write_only_collection(name):
-    """
-
-    :type name: AnyStr
-    # :rtype: ContextManager[Collection[Mapping[str, Any]], Any, None]
-    """
-    with _lock_table_lock:
-        if not name in _rwlock_table:
-            # _rwlock_table[name] = rwlock.RWLockFair(lock_factory=lambda: RLock())
-            _rwlock_table[name] = rwlock.RWLockFair()
-        this_lock = _rwlock_table[name]
-    with this_lock.gen_wlock():
-        yield get_collection(name)
-
-
-@contextlib.contextmanager
-def with_read_only_collection(name):
-    """
-
-    :type name: AnyStr
-    # :rtype: ContextManager[Collection[Mapping[str, Any]], Any, None]
-    """
-    with _lock_table_lock:
-        if not name in _rwlock_table:
-            # _rwlock_table[name] = rwlock.RWLockFair(lock_factory=lambda: RLock())
-            _rwlock_table[name] = rwlock.RWLockFair()
-        this_lock = _rwlock_table[name]
-    with this_lock.gen_rlock():
-        yield get_collection(name)
+#
+# @contextlib.contextmanager
+# def with_write_only_collection(name):
+#     """
+#
+#     :type name: AnyStr
+#     # :rtype: ContextManager[Collection[Mapping[str, Any]], Any, None]
+#     """
+#     with _lock_table_lock:
+#         if not name in _rwlock_table:
+#             # _rwlock_table[name] = rwlock.RWLockFair(lock_factory=lambda: RLock())
+#             _rwlock_table[name] = rwlock.RWLockFair()
+#         this_lock = _rwlock_table[name]
+#     with this_lock.gen_wlock():
+#         yield get_collection(name)
+#
+#
+# @contextlib.contextmanager
+# def with_read_only_collection(name):
+#     """
+#
+#     :type name: AnyStr
+#     # :rtype: ContextManager[Collection[Mapping[str, Any]], Any, None]
+#     """
+#     with _lock_table_lock:
+#         if not name in _rwlock_table:
+#             # _rwlock_table[name] = rwlock.RWLockFair(lock_factory=lambda: RLock())
+#             _rwlock_table[name] = rwlock.RWLockFair()
+#         this_lock = _rwlock_table[name]
+#     with this_lock.gen_rlock():
+#         yield get_collection(name)
 
 
 def initialize_database():
@@ -101,7 +105,5 @@ def initialize_database():
 __all__ = [
     'get_grid_fs_bucket',
     'get_collection',
-    'with_write_only_collection',
-    'with_read_only_collection',
     'initialize_database',
 ]

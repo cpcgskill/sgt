@@ -19,7 +19,7 @@ import uuid
 import datetime
 import time
 
-root_url = 'http://localhost:8000/sgt'
+root_url = 'http://localhost:12000/sgt'
 
 test_secret_id = f'test_{uuid.uuid4().hex}'
 test_secret_key = f'test_{uuid.uuid4().hex}'
@@ -53,6 +53,8 @@ test_list = [
         'url': '/public/create_sgt_model',
         'json': {
             'name': test_model_name,
+            'app_name': 'test',
+            'model_type': 'std',
             'client_data': {},
             'in_size': test_input_size,
             'out_size': test_output_size,
@@ -71,6 +73,7 @@ test_list = [
         'url': '/public/clone_sgt_model_to_mine',
         'json': {
             'new_name': 'test2',
+            'app_name': 'test',
             'author_unique_id': test_secret_id,
             'name': test_model_name,
         },
@@ -79,6 +82,7 @@ test_list = [
         'url': '/public/run_sgt_model',
         'json': {
             'name': test_model_name,
+            'app_name': 'test',
             'data': [[1] * test_input_size]*1024,
         },
     },

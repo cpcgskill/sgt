@@ -13,8 +13,8 @@
 from __future__ import unicode_literals, print_function, division
 
 import contextlib
+import json
 import logging
-import os
 import time
 import random
 
@@ -22,10 +22,8 @@ import cachetools
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
-from sgt.model import SGTModule
-from sgt.db import with_read_only_collection, with_write_only_collection
-from sgt.utils import make_device
-import sgt.utils as utils
+import sgt.models as sgt_models
+from sgt.db import get_grid_fs_bucket, get_collection
 
 # batch_size = 8192
 # save_interval = 8
@@ -36,10 +34,10 @@ default_sleep_seconds = 0.1
 fail_sleep_seconds = 0.6
 is_cat_do_time = True
 
-device = make_device()
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
 )
 
 logger = logging.getLogger(name=__name__)
@@ -63,22 +61,32 @@ def timing(work_name):
 
 @cachetools.cached(cachetools.TTLCache(maxsize=16, ttl=30))
 def load_data(checkpoint_id):
-    with with_read_only_collection('data') as collection:
-        if collection.count_documents({'checkpoint_id': checkpoint_id}) > 0:
-            docs = collection.find({'checkpoint_id': checkpoint_id})
-            data, label = zip(*((i['data'], i['label']) for i in docs))
+    fs_bucket = get_grid_fs_bucket()
+    collection = get_collection('data')
+    if collection.count_documents({'checkpoint_id': checkpoint_id}) > 0:
+        docs = collection.find({'checkpoint_id': checkpoint_id})
+        data_list = []
+        label_list = []
+        for i in docs:
+            with fs_bucket.open_download_stream_by_name(i['data_file_name']) as stream:
+                data_and_label = json.loads(stream.read())
+            data, label = zip(*data_and_label)
             data = torch.Tensor(data)
             label = torch.Tensor(label)
-            # 将训练数据的特征和标签组合
-            dataset = TensorDataset(data, label)
-            return DataLoader(
-                dataset,
-                batch_size,
-                shuffle=True,
-                pin_memory=True,
-            )
-        else:
-            return None
+            data_list.append(data)
+            label_list.append(label)
+        data = torch.cat(data_list)
+        label = torch.cat(label_list)
+        # 将训练数据的特征和标签组合
+        dataset = TensorDataset(data, label)
+        return DataLoader(
+            dataset,
+            batch_size,
+            shuffle=True,
+            pin_memory=True,
+        )
+    else:
+        return None
 
 
 def remake_tensor_by_device(d):
@@ -90,13 +98,14 @@ def remake_tensor_list_by_device(*data_list):
 
 
 def train_model(checkpoint_id):
-    with with_read_only_collection('checkpoint') as collection:
-        doc = collection.find_one({'_id': checkpoint_id})
+    collection = get_collection('checkpoint')
+
+    doc = collection.find_one({'_id': checkpoint_id})
     if doc is None:
         time.sleep(fail_sleep_seconds)
         return
 
-    model = utils.load_checkpoint_from_gridfs(SGTModule, doc['checkpoint_file_id'])
+    model = sgt_models.load_checkpoint_from_gridfs(doc['model_type'], doc['checkpoint_file_id'])
 
     data_iter = load_data(checkpoint_id)
     if data_iter is None:
@@ -113,37 +122,19 @@ def train_model(checkpoint_id):
             if torch.max(model.train(x, y).data) < 0.01:
                 break
 
-        with with_read_only_collection('checkpoint') as collection:
-            if collection.count_documents({'_id': checkpoint_id}) < 1:
-                return
-        new_checkpoint_file_id = utils.save_checkpoint_to_gridfs(model)
-        try:
-            with with_write_only_collection('checkpoint') as collection:
-                collection.update_one(
-                    {
-                        '_id': checkpoint_id,
-                    },
-                    {
-                        '$set': {
-                            'checkpoint_file_id': new_checkpoint_file_id,
-                        }
-                    },
-                )
-        except:
-            utils.remove_checkpoint_from_gridfs(new_checkpoint_file_id)
-            raise
-        else:
-            utils.remove_checkpoint_from_gridfs(doc['checkpoint_file_id'])
+        if collection.count_documents({'_id': checkpoint_id}) < 1:
+            return
+        sgt_models.update_checkpoint_to_gridfs(model, doc['checkpoint_file_id'])
 
 
 def train_all_model():
-    with with_read_only_collection('checkpoint') as collection:
-        checkpoint_count = collection.count_documents({})
+    collection = get_collection('checkpoint')
+    checkpoint_count = collection.count_documents({})
     if checkpoint_count <= 0:
         time.sleep(success_sleep_seconds)
         return
-    with with_read_only_collection('checkpoint') as collection:
-        checkpoint_id_list = [doc['_id'] for doc in collection.find()]
+
+    checkpoint_id_list = [doc['_id'] for doc in collection.find()]
 
     random.shuffle(checkpoint_id_list)
 
@@ -161,5 +152,10 @@ def main():
             logging.error('train_all_model({})'.format(repr(e)))
 
 
+def test():
+    while True:
+        train_all_model()
+
+
 if __name__ == '__main__':
-    main()
+    test()
