@@ -10,7 +10,7 @@
 :爱发电: https://afdian.net/@Phantom_of_the_Cang
 
 """
-
+import contextlib
 from typing import *
 import os
 import pymongo
@@ -36,6 +36,11 @@ def get_grid_fs():
 def get_collection(name):
     return connect_to_database().get_collection(name)
 
+@contextlib.contextmanager
+def start_transaction():
+    with client.start_session() as session:
+        with session.start_transaction():
+            yield session
 
 def initialize_database():
     db = connect_to_database()
@@ -60,5 +65,6 @@ __all__ = [
     'get_collection',
     'get_grid_fs_bucket',
     'get_collection',
+    'start_transaction',
     'initialize_database',
 ]
