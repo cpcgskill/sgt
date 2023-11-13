@@ -134,6 +134,7 @@ class SGTModule(object):
         self.model_list = model_list
         self.training_count = 0
         self.choose_step_size = choose_step_size
+        self.min_loss_list = []
 
     @staticmethod
     def auto_create(in_size, out_size, model_count=3):
@@ -168,6 +169,7 @@ class SGTModule(object):
             'model_list': [i.create_checkpoint() for i in self.model_list],
             'training_count': self.training_count,
             'choose_step_size': self.choose_step_size,
+            'min_loss_list': self.min_loss_list,
         }
 
     @staticmethod
@@ -177,6 +179,7 @@ class SGTModule(object):
             choose_step_size=checkpoint['choose_step_size'],
         )
         model.training_count = checkpoint['training_count']
+        model.min_loss_list = checkpoint['min_loss_list']
         return model
 
     def run(self, x):
@@ -208,7 +211,18 @@ class SGTModule(object):
                 #         new_model = new_model.add_random_value_by_weights(torch.max(best_loss))
                 #         self.model_list[i] = new_model
             ##
-            output_lose = loss_list[0]
-            for i in loss_list[1:]:
-                output_lose = output_lose + i
-        return output_lose / len(loss_list)
+            # output_lose = loss_list[0]
+            # for i in loss_list[1:]:
+            #     output_lose = output_lose + i
+            self.min_loss_list.append(min([torch.max(i).item() for i in loss_list]))
+
+    def is_finish(self):
+        if len(self.min_loss_list) < 20:
+            return False
+        # len(self.min_loss_list) = 35, [-5:5] [5:15] [15:25] [25:35]
+        chunk_list = [self.min_loss_list[max(len(self.min_loss_list) - i - 10, 0):len(self.min_loss_list) - i] for i in
+                      range(0, len(self.min_loss_list), 10)]
+        chunk_list = [sum(i) / len(i) for i in chunk_list]
+        # 计算梯度
+        gradient_list = [chunk_list[i] - chunk_list[i - 1] for i in range(1, len(chunk_list))]
+        return abs(gradient_list[-1]) < 0.01

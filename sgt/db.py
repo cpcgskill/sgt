@@ -54,11 +54,15 @@ def initialize_database():
         collection.create_index('user_unique_id')
         collection.create_index('name')
         collection.create_index('app_name')
-
     if not 'data' in collection_names:
         collection = db.create_collection('data')
         collection.create_index('checkpoint_id')
         collection.create_index('user_unique_id')
+    if not 'train_status' in collection_names:
+        collection = db.create_collection('train_status')
+        collection.create_index('checkpoint_id', unique=True)
+        collection.create_index('is_finish')
+
 
 __all__ = [
     'connect_to_database',

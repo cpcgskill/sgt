@@ -25,6 +25,7 @@ import torch
 import sgt.models as sgt_models
 
 from sgt.db import get_grid_fs_bucket, get_collection
+from sgt.fs import save_file, read_file, update_file, remove_file, clone_file
 
 bp = Blueprint('sgt', __name__)
 
@@ -360,10 +361,11 @@ def upload_sgt_model_train_data_route():
     create_time = datetime.datetime.now()
 
     data_file_name = f'data/{uuid.uuid4().hex}'
-    get_grid_fs_bucket().upload_from_stream(
-        data_file_name,
-        json.dumps(data).encode('utf-8'),
-    )
+    save_file(data_file_name, json.dumps(data).encode('utf-8'))
+    # get_grid_fs_bucket().upload_from_stream(
+    #     data_file_name,
+    #     json.dumps(data).encode('utf-8'),
+    # )
 
     collection = get_collection('data')
     collection.insert_one(

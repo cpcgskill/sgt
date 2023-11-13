@@ -42,3 +42,7 @@ class CheckpointProtocol(Protocol):
         :return: loss
         """
         ...
+
+    def is_finish(self) -> bool:
+        """check the checkpoint is finish or not"""
+        ...

@@ -21,6 +21,9 @@ import time
 from sgt.db import connect_to_database, get_collection
 
 
+class LockError(Exception): pass
+
+
 class MongoLock:
     """
     :todo 未测试, TTL还无法正常运行
@@ -85,6 +88,34 @@ class MongoLock:
                     pass
 
         raise TimeoutError('Timeout waiting for lock')
+
+    @contextmanager
+    def try_acquire_lock(self, lock_id: AnyStr):
+        collection = self.collection
+
+        # try insert a lock
+        if collection.count_documents({'lock_id': lock_id}) > 0:
+            raise LockError('Lock exists')
+
+        # try insert a lock
+        try:
+            result = collection.insert_one({
+                'lock_id': lock_id,
+                'create_time': datetime.datetime.utcnow(),
+            })
+        except DuplicateKeyError:
+            raise LockError('Lock exists')
+
+        try:
+            yield
+            return
+        finally:
+            # try to delete the lock
+            try:
+                collection.delete_one({'_id': result.inserted_id})
+            except OperationFailure:
+                # lock has expired, or has been deleted
+                pass
 
 
 if __name__ == '__main__':

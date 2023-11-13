@@ -47,7 +47,7 @@ class Test(unittest.TestCase):
 
         return test_secret_id, test_secret_key
 
-    def test_all(self):
+    def test_integrity(self):
         test_secret_id, test_secret_key = self.make_secret()
 
         test_model_name = f'test_{uuid.uuid4().hex}'

@@ -24,6 +24,9 @@ from torch.utils.data import DataLoader, TensorDataset
 
 import sgt.models as sgt_models
 from sgt.db import get_grid_fs_bucket, get_collection
+from sgt.fs import read_file
+from sgt.lock import MongoLock
+
 
 # batch_size = 8192
 # save_interval = 8
@@ -42,6 +45,8 @@ logging.basicConfig(
 
 logger = logging.getLogger(name=__name__)
 logger.setLevel(logging.INFO)
+
+train_lock = MongoLock('train_lock')
 
 
 def info(*args):
@@ -68,8 +73,9 @@ def load_data(checkpoint_id):
         data_list = []
         label_list = []
         for i in docs:
-            with fs_bucket.open_download_stream_by_name(i['data_file_name']) as stream:
-                data_and_label = json.loads(stream.read())
+            # with fs_bucket.open_download_stream_by_name(i['data_file_name']) as stream:
+            #     data_and_label = json.loads(stream.read())
+            data_and_label = json.loads(read_file(i['data_file_name']))
             data, label = zip(*data_and_label)
             data = torch.Tensor(data)
             label = torch.Tensor(label)
@@ -99,10 +105,15 @@ def remake_tensor_list_by_device(*data_list):
 
 def train_model(checkpoint_id):
     collection = get_collection('checkpoint')
+    status_collection = get_collection('train_status')
 
     doc = collection.find_one({'_id': checkpoint_id})
     if doc is None:
         time.sleep(fail_sleep_seconds)
+        return
+
+    # if the model is finish, then return
+    if status_collection.count_documents({'checkpoint_id': checkpoint_id, 'is_finish': True}) > 0:
         return
 
     model = sgt_models.load_checkpoint_from_gridfs(doc['model_type'], doc['checkpoint_file_id'])
@@ -119,7 +130,14 @@ def train_model(checkpoint_id):
     )):
         for _ in range(save_interval):
             x, y = remake_tensor_list_by_device(*next(iter(data_iter)))
-            if torch.max(model.train(x, y).data) < 0.01:
+            model.train(x, y)
+            if model.is_finish():
+                # set model is finish, by update or insert
+                status_collection.update_one(
+                    {'checkpoint_id': checkpoint_id},
+                    {'$set': {'is_finish': True}},
+                    upsert=True,
+                )
                 break
 
         if collection.count_documents({'_id': checkpoint_id}) < 1:
@@ -139,7 +157,8 @@ def train_all_model():
     random.shuffle(checkpoint_id_list)
 
     for checkpoint_id in checkpoint_id_list:
-        train_model(checkpoint_id)
+        with train_lock.try_acquire_lock(checkpoint_id):
+            train_model(checkpoint_id)
 
 
 def main():
