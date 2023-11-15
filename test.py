@@ -23,8 +23,8 @@ import time
 import multiprocessing
 import unittest
 
-root_url = 'http://localhost:12000/sgt'
-test_key = 'test_sgtone_key'
+root_url = 'http://localhost:10011/sgt'
+test_key = 'XBW7zMhukbj1OaWcBEEH'
 test_process_num = 8
 # test_process_num = os.cpu_count()
 
