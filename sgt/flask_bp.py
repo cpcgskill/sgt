@@ -245,7 +245,7 @@ def read_my_sgt_model_route():
     return jsonify([
         {
             k: str(i[k]) if isinstance(i[k], ObjectId) else i[k] for k in
-            ['user_unique_id', 'name', 'client_data', 'model_type', 'in_size', 'out_size']
+            ['user_unique_id', 'name', 'client_data', 'app_name', 'model_type', 'in_size', 'out_size', 'is_public']
         }
         for i in collection.find({'user_unique_id': user_unique_id})
     ])
@@ -260,7 +260,7 @@ def read_public_sgt_model_name_route():
     return jsonify([
         {
             k: str(i[k]) if isinstance(i[k], ObjectId) else i[k] for k in
-            ['user_unique_id', 'name', 'client_data', 'model_type', 'in_size', 'out_size']
+            ['user_unique_id', 'name', 'client_data', 'app_name', 'model_type', 'in_size', 'out_size', 'is_public']
         }
         for i in collection.find({'is_public': True})
     ])

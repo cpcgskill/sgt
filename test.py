@@ -23,9 +23,11 @@ import time
 import multiprocessing
 import unittest
 
-root_url = 'http://localhost:10011/sgt'
-test_key = 'XBW7zMhukbj1OaWcBEEH'
+root_url = 'http://localhost:12000/sgt'
+test_key = 'test_sgtone_key'
 test_process_num = 8
+
+
 # test_process_num = os.cpu_count()
 
 class Test(unittest.TestCase):
@@ -46,6 +48,9 @@ class Test(unittest.TestCase):
         print('update_auth_token', res)
 
         return test_secret_id, test_secret_key
+
+    def test_make_secret(self):
+        print(self.make_secret())
 
     def test_integrity(self):
         test_secret_id, test_secret_key = self.make_secret()
