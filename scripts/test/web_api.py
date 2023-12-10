@@ -26,6 +26,7 @@ import unittest
 root_url = 'http://localhost:12000/sgt'
 test_key = 'test_sgtone_key'
 test_process_num = 8
+test_long_run = 100
 
 
 # test_process_num = os.cpu_count()
@@ -53,6 +54,7 @@ class Test(unittest.TestCase):
         print(self.make_secret())
 
     def test_integrity(self):
+        """通过测试所有的接口来测试整体的完整性"""
         test_secret_id, test_secret_key = self.make_secret()
 
         test_model_name = f'test_{uuid.uuid4().hex}'
@@ -131,90 +133,6 @@ class Test(unittest.TestCase):
             print('result: {}'.format(data)[:100])
             print('time: {}'.format(end_time - start_time))
 
-    def test_long_run(self):
-        secret_id, secret_key = self.make_secret()
-        # make a model
-        model_name = f'test_{uuid.uuid4().hex}'
-        input_size = 64
-        output_size = 1
-
-        res = requests.post(
-            root_url + '/public/create_sgt_model',
-            json={
-                'secret_id': secret_id,
-                'secret_key': secret_key,
-                'app_name': 'test',
-
-                'name': model_name,
-                'model_type': 'std',
-                'client_data': {},
-                'in_size': input_size,
-                'out_size': output_size,
-                'is_public': True,
-            }
-        )
-        self.assertEqual(res.status_code, 200)
-        print('make model')
-
-        # upload data
-        res = requests.post(
-            root_url + '/public/upload_sgt_model_train_data',
-            json={
-                'secret_id': secret_id,
-                'secret_key': secret_key,
-                'app_name': 'test',
-
-                'name': model_name,
-                'train_data': [[[1] * input_size, [1] * output_size]] * 1024,
-            }
-        )
-        self.assertEqual(res.status_code, 200)
-        print('upload data')
-
-        # run
-        for i in range(1000):
-            res = requests.post(
-                root_url + '/public/run_sgt_model',
-                json={
-                    'secret_id': secret_id,
-                    'secret_key': secret_key,
-                    'app_name': 'test',
-
-                    'name': model_name,
-                    'data': [[1] * input_size] * 1024,
-                }
-            )
-            self.assertEqual(res.status_code, 200)
-            print('run: {}'.format(i))
-
-        # multi run
-        args_list = []
-        for i in range(1000):
-            res = (
-                root_url + '/public/run_sgt_model',
-                {
-                    'secret_id': secret_id,
-                    'secret_key': secret_key,
-                    'app_name': 'test',
-
-                    'name': model_name,
-                    'data': [[1] * input_size] * 1024,
-                }
-            )
-            args_list.append(res)
-
-        def _run(args):
-            url, json = args
-            res = requests.post(
-                url,
-                json=json
-            )
-            self.assertEqual(res.status_code, 200)
-            print('run: {}'.format(i))
-
-        with multiprocessing.Pool(8) as p:
-            p.map(_run, args_list)
-
     @staticmethod
     def _run(args):
         url, json = args
@@ -225,6 +143,7 @@ class Test(unittest.TestCase):
         return res.status_code, res.json()
 
     def test_multi_request(self):
+        """测试并发压力测试"""
         secret_id, secret_key = self.make_secret()
         # make a model
         model_name = f'test_{uuid.uuid4().hex}'
@@ -286,3 +205,8 @@ class Test(unittest.TestCase):
             print(status_code, data)
         for status_code, _ in res_list:
             self.assertEqual(status_code, 200)
+
+    def test_long_run(self):
+        for i in range(test_long_run):
+            print(f'long run {i}/{test_long_run}')
+            self.test_multi_request()
