@@ -24,8 +24,9 @@ import torch
 
 import sgt.models as sgt_models
 
-from sgt.db import get_grid_fs_bucket, get_collection
-from sgt.fs import save_file, read_file, update_file, remove_file, clone_file
+from sgt.db import get_collection
+from sgt.config import fs
+
 
 bp = Blueprint('sgt', __name__)
 
@@ -38,6 +39,8 @@ public_exception_type_list = [KnowException]
 
 @bp.errorhandler(Exception)
 def try_exception(e: Exception):
+    import traceback
+    traceback.print_exc()
     if hasattr(e.__class__, '__module__'):
         exception = "{}.{}".format(e.__class__.__module__, e.__class__.__name__)
     else:
@@ -144,7 +147,7 @@ def create_sgt_model_route():
     model = sgt_models.create_model(model_type, in_size, out_size)
 
     # 保存模型
-    checkpoint_file_id = sgt_models.save_checkpoint_to_gridfs(model)
+    checkpoint_file_id = sgt_models.save_checkpoint(model)
 
     # set to database
     collection.update_one(
@@ -200,7 +203,7 @@ def delete_sgt_model_route():
     collection = get_collection('checkpoint')
     collection.delete_one({'user_unique_id': user_unique_id, 'name': name, 'app_name': app_name})
 
-    sgt_models.remove_checkpoint_from_gridfs(doc['checkpoint_file_id'])
+    sgt_models.remove_checkpoint(doc['checkpoint_file_id'])
     # 返回 JSON 结果
     return jsonify(None)
 
@@ -286,7 +289,7 @@ def clone_sgt_model_to_mine_route():
     # doc = collection.find_one({'user_unique_id': author_unique_id, 'name': name, 'app_name': app_name})
     doc = find_model(author_unique_id, name, app_name)
 
-    new_checkpoint_file_id = sgt_models.clone_checkpoint_to_gridfs(doc['checkpoint_file_id'])
+    new_checkpoint_file_id = sgt_models.clone_checkpoint(doc['checkpoint_file_id'])
 
     collection.update_one(
         {
@@ -332,7 +335,7 @@ def run_sgt_model_route():
     if len(data[0]) != doc['in_size']:
         raise RunWeightsNetException('Data length not equal sgt_model in_size')
 
-    model = sgt_models.load_checkpoint_from_gridfs(doc['model_type'], doc['checkpoint_file_id'])
+    model = sgt_models.load_checkpoint(doc['model_type'], doc['checkpoint_file_id'])
 
     out_data = model.run(torch.Tensor(data))
     # 返回 JSON 结果
@@ -361,11 +364,7 @@ def upload_sgt_model_train_data_route():
     create_time = datetime.datetime.now()
 
     data_file_name = f'data/{uuid.uuid4().hex}'
-    save_file(data_file_name, json.dumps(data).encode('utf-8'))
-    # get_grid_fs_bucket().upload_from_stream(
-    #     data_file_name,
-    #     json.dumps(data).encode('utf-8'),
-    # )
+    fs.update_file(data_file_name, json.dumps(data).encode('utf-8'))
 
     collection = get_collection('data')
     collection.insert_one(

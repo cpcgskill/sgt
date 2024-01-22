@@ -12,6 +12,8 @@
 """
 from __future__ import unicode_literals, print_function, division
 
+import traceback
+
 import contextlib
 import json
 import logging
@@ -24,24 +26,19 @@ from torch.utils.data import DataLoader, TensorDataset
 
 import sgt.models as sgt_models
 from sgt.db import get_grid_fs_bucket, get_collection
-from sgt.fs import read_file
-from sgt.lock import MongoLock
+from sgt.config import fs
+from sgt.lock import MongoLock, MongoLockException
 
-
-# batch_size = 8192
-# save_interval = 8
-batch_size = 256
-save_interval = 256
-success_sleep_seconds = 0.3
-default_sleep_seconds = 0.1
-fail_sleep_seconds = 0.6
+train_step = 64 * 4 * 8
+batch_size = 64 * 4
+save_interval = 64 * 4
+success_sleep_seconds = 0.1
+default_sleep_seconds = 0.05
+fail_sleep_seconds = 0.3
 is_cat_do_time = True
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
-logging.basicConfig(
-    level=logging.DEBUG,
-)
+# device = torch.device('cpu')
 
 logger = logging.getLogger(name=__name__)
 logger.setLevel(logging.INFO)
@@ -65,8 +62,7 @@ def timing(work_name):
 
 
 @cachetools.cached(cachetools.TTLCache(maxsize=16, ttl=30))
-def load_data(checkpoint_id):
-    fs_bucket = get_grid_fs_bucket()
+def load_data(checkpoint_id, batch_size_):
     collection = get_collection('data')
     if collection.count_documents({'checkpoint_id': checkpoint_id}) > 0:
         docs = collection.find({'checkpoint_id': checkpoint_id})
@@ -75,7 +71,7 @@ def load_data(checkpoint_id):
         for i in docs:
             # with fs_bucket.open_download_stream_by_name(i['data_file_name']) as stream:
             #     data_and_label = json.loads(stream.read())
-            data_and_label = json.loads(read_file(i['data_file_name']))
+            data_and_label = json.loads(fs.read_file(i['data_file_name']))
             data, label = zip(*data_and_label)
             data = torch.Tensor(data)
             label = torch.Tensor(label)
@@ -87,7 +83,7 @@ def load_data(checkpoint_id):
         dataset = TensorDataset(data, label)
         return DataLoader(
             dataset,
-            batch_size,
+            batch_size_,
             shuffle=True,
             pin_memory=True,
         )
@@ -114,11 +110,18 @@ def train_model(checkpoint_id):
 
     # if the model is finish, then return
     if status_collection.count_documents({'checkpoint_id': checkpoint_id, 'is_finish': True}) > 0:
-        return
+        if random.random() < 0.5:
+            return
 
-    model = sgt_models.load_checkpoint_from_gridfs(doc['model_type'], doc['checkpoint_file_id'])
-
-    data_iter = load_data(checkpoint_id)
+    model = sgt_models.load_checkpoint(
+        doc['model_type'],
+        doc['checkpoint_file_id'],
+        device=device,
+    )
+    if random.random() < 0.3:
+        data_iter = load_data(checkpoint_id, random.randint(1, batch_size))
+    else:
+        data_iter = load_data(checkpoint_id, batch_size)
     if data_iter is None:
         time.sleep(fail_sleep_seconds)
         return
@@ -128,21 +131,22 @@ def train_model(checkpoint_id):
             batch_size,
             save_interval
     )):
-        for _ in range(save_interval):
+        for train_idx in range(1, train_step + 1):
             x, y = remake_tensor_list_by_device(*next(iter(data_iter)))
             model.train(x, y)
-            if model.is_finish():
-                # set model is finish, by update or insert
-                status_collection.update_one(
-                    {'checkpoint_id': checkpoint_id},
-                    {'$set': {'is_finish': True}},
-                    upsert=True,
-                )
-                break
+            # if the train_idx is save_interval, then save model
+            if train_idx % save_interval == 0 or train_idx == train_step:
+                if model.is_finish():
+                    # set model is finish, by update or insert
+                    status_collection.update_one(
+                        {'checkpoint_id': checkpoint_id},
+                        {'$set': {'is_finish': True}},
+                        upsert=True,
+                    )
 
-        if collection.count_documents({'_id': checkpoint_id}) < 1:
-            return
-        sgt_models.update_checkpoint_to_gridfs(model, doc['checkpoint_file_id'])
+                if collection.count_documents({'_id': checkpoint_id}) < 1:
+                    return
+                sgt_models.update_checkpoint(model, doc['checkpoint_file_id'])
 
 
 def train_all_model():
@@ -157,8 +161,11 @@ def train_all_model():
     random.shuffle(checkpoint_id_list)
 
     for checkpoint_id in checkpoint_id_list:
-        with train_lock.try_acquire_lock(checkpoint_id):
-            train_model(checkpoint_id)
+        try:
+            with train_lock.try_acquire_lock(checkpoint_id):
+                train_model(checkpoint_id)
+        except MongoLockException:
+            pass
 
 
 def main():
@@ -168,7 +175,7 @@ def main():
             time.sleep(success_sleep_seconds)
         except Exception as e:
             time.sleep(fail_sleep_seconds)
-            logging.error('train_all_model({})'.format(repr(e)))
+            logging.error('train_all_model error: \n{}'.format(traceback.format_exc()))
 
 
 def test():

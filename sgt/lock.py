@@ -21,7 +21,7 @@ import time
 from sgt.db import connect_to_database, get_collection
 
 
-class LockError(Exception): pass
+class MongoLockException(Exception): pass
 
 
 class MongoLock:
@@ -95,7 +95,7 @@ class MongoLock:
 
         # try insert a lock
         if collection.count_documents({'lock_id': lock_id}) > 0:
-            raise LockError('Lock exists')
+            raise MongoLockException('Lock exists')
 
         # try insert a lock
         try:
@@ -104,7 +104,7 @@ class MongoLock:
                 'create_time': datetime.datetime.utcnow(),
             })
         except DuplicateKeyError:
-            raise LockError('Lock exists')
+            raise MongoLockException('Lock exists')
 
         try:
             yield

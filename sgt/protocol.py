@@ -24,7 +24,7 @@ class CheckpointProtocol(Protocol):
     def to_checkpoint(self) -> Dict: ...
 
     @staticmethod
-    def from_checkpoint(checkpoint: Dict) -> 'CheckpointProtocol': ...
+    def from_checkpoint(checkpoint: Dict,  device: Union[AnyStr, torch.device]='cpu') -> 'CheckpointProtocol': ...
 
     def run(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -46,3 +46,19 @@ class CheckpointProtocol(Protocol):
     def is_finish(self) -> bool:
         """check the checkpoint is finish or not"""
         ...
+
+class FSProtocol(Protocol):
+    def save_file(self, file_name: AnyStr, buf: bytes) -> 'FSProtocol':
+        pass
+
+    def read_file(self, file_name: AnyStr) -> bytes:
+        pass
+
+    def update_file(self, file_name: AnyStr, buf: bytes) -> 'FSProtocol':
+        pass
+
+    def remove_file(self, file_name: AnyStr) -> 'FSProtocol':
+        pass
+
+    def clone_file(self, file_name: AnyStr, new_file_name: AnyStr) -> 'FSProtocol':
+        pass

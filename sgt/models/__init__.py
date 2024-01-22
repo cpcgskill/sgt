@@ -19,8 +19,9 @@ from typing import *
 import torch
 
 from sgt.protocol import CheckpointProtocol
-from sgt.db import get_grid_fs_bucket
-import sgt.fs as fs
+from sgt.config import fs
+
+
 from sgt.models.std import SGTModule
 
 models = {
@@ -39,7 +40,7 @@ def create_model(model_type: AnyStr, in_size: int, out_size: int) -> CheckpointP
     return models[model_type].auto_create(in_size, out_size)
 
 
-def save_checkpoint_to_gridfs(checkpoint: CheckpointProtocol) -> AnyStr:
+def save_checkpoint(checkpoint: CheckpointProtocol) -> AnyStr:
     """
     保存模型到 gridfs
     """
@@ -54,17 +55,17 @@ def save_checkpoint_to_gridfs(checkpoint: CheckpointProtocol) -> AnyStr:
     return file_name
 
 
-def load_checkpoint_from_gridfs(model_type: AnyStr, file_name: AnyStr) -> CheckpointProtocol:
+def load_checkpoint(model_type: AnyStr, file_name: AnyStr, device: Union[AnyStr, torch.device]= 'cpu') -> CheckpointProtocol:
     """
     从 gridfs 读取模型
     """
     model_type = models[model_type]
     buf = fs.read_file(file_name)
-    checkpoint = torch.load(io.BytesIO(buf))
-    return model_type.from_checkpoint(checkpoint)
+    checkpoint = torch.load(io.BytesIO(buf), map_location=device)
+    return model_type.from_checkpoint(checkpoint, device=device)
 
 
-def update_checkpoint_to_gridfs(checkpoint: CheckpointProtocol, file_name: AnyStr) -> AnyStr:
+def update_checkpoint(checkpoint: CheckpointProtocol, file_name: AnyStr) -> AnyStr:
     """
     更新模型到 gridfs
     """
@@ -77,14 +78,14 @@ def update_checkpoint_to_gridfs(checkpoint: CheckpointProtocol, file_name: AnySt
     return file_name
 
 
-def remove_checkpoint_from_gridfs(file_name: AnyStr):
+def remove_checkpoint(file_name: AnyStr):
     """
     从 gridfs 删除模型
     """
     fs.remove_file(file_name)
 
 
-def clone_checkpoint_to_gridfs(file_name: AnyStr) -> AnyStr:
+def clone_checkpoint(file_name: AnyStr) -> AnyStr:
     """
     克隆模型到 gridfs
     :param file_name: 模型的 id

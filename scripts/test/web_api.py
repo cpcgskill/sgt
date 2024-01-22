@@ -23,7 +23,7 @@ import time
 import multiprocessing
 import unittest
 
-root_url = 'http://localhost:12000/sgt'
+root_url = 'https://u200470-b225-f27e70e8.westc.gpuhub.com:8443/sgt'
 test_key = 'test_sgtone_key'
 test_process_num = 8
 test_long_run = 100
@@ -45,16 +45,16 @@ class Test(unittest.TestCase):
                 'secret_key': test_secret_key,
                 'end_time': (datetime.datetime.now() + datetime.timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S'),
             }
-        ).json()
+        )
+        self.assertEqual(res.status_code, 200, res.text)
         print('update_auth_token', res)
-
         return test_secret_id, test_secret_key
 
     def test_make_secret(self):
         print(self.make_secret())
 
     def test_integrity(self):
-        """通过测试所有的接口来测试整体的完整性"""
+        """通过测试, 测试所有的接口来测试整体的完整性"""
         test_secret_id, test_secret_key = self.make_secret()
 
         test_model_name = f'test_{uuid.uuid4().hex}'
@@ -111,6 +111,7 @@ class Test(unittest.TestCase):
                 'url': '/public/upload_sgt_model_train_data',
                 'json': {
                     'name': test_model_name,
+                    'app_name': 'test',
                     'train_data': [[[1] * test_input_size, [1] * test_output_size]] * 1024,
                 },
             },
@@ -121,13 +122,12 @@ class Test(unittest.TestCase):
             start_time = time.time()
             res = requests.post(
                 url,
-                json=i['json'] | {
+                json={**i['json'], **{
                     'secret_id': test_secret_id,
                     'secret_key': test_secret_key,
-                    'app_name': 'test',
-                }
+                }}
             )
-            self.assertEqual(res.status_code, 200)
+            self.assertEqual(res.status_code, 200, res.text)
             data = res.json()
             end_time = time.time()
             print('result: {}'.format(data)[:100])
@@ -165,7 +165,7 @@ class Test(unittest.TestCase):
                 'is_public': True,
             }
         )
-        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.status_code, 200, res.text)
         print('make model')
 
         # upload data
@@ -180,7 +180,7 @@ class Test(unittest.TestCase):
                 'train_data': [[[1] * input_size, [1] * output_size]] * 1024,
             }
         )
-        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.status_code, 200, res.text)
         print('upload data')
 
         # run
@@ -203,8 +203,8 @@ class Test(unittest.TestCase):
             res_list = p.map(Test._run, args_list)
         for status_code, data in res_list:
             print(status_code, data)
-        for status_code, _ in res_list:
-            self.assertEqual(status_code, 200)
+        for status_code, json in res_list:
+            self.assertEqual(status_code, 200, json)
 
     def test_long_run(self):
         for i in range(test_long_run):
