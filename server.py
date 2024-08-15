@@ -13,6 +13,16 @@
 from __future__ import unicode_literals, print_function, division
 
 import os
+if os.path.isfile('./sgt.env'):
+    import dotenv
+    dotenv.load_dotenv('./sgt.env')
+
+import logging
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
+)
 
 
 def main():
@@ -26,7 +36,11 @@ def main():
     ]
     for bp in bps:
         app.register_blueprint(bp, url_prefix="/{}".format(bp.name))
-    app.run(host='127.0.0.1', port=12000, debug=os.environ.get('sgt_debug', default='false').lower() in {'true', 'on'})
+    app.run(
+        host=os.environ.get('sgt_host', '0.0.0.0'),
+        port=int(os.environ.get('sgt_port', '6006')),
+        debug=os.environ.get('sgt_debug', default='false').lower() in {'true', 'on'}
+    )
 
 
 if __name__ == '__main__':

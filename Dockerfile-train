@@ -1,4 +1,4 @@
-FROM python:3.10.6
+FROM pytorch/pytorch:1.13.1-cuda11.6-cudnn8-runtime
 
 
 WORKDIR /usr/src/app
@@ -11,6 +11,4 @@ COPY . .
 RUN pip install -r requirements.txt -i https://pypi.douban.com/simple
 
 
-EXPOSE 8000
-
-CMD [ "python", "./main.py" ]
+CMD [ "python", "./train.py" ]
