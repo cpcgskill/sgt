@@ -36,7 +36,11 @@ def main():
     ]
     for bp in bps:
         app.register_blueprint(bp, url_prefix="/{}".format(bp.name))
-    app.run(host='0.0.0.0', port=6006, debug=os.environ.get('sgt_debug', default='false').lower() in {'true', 'on'})
+    app.run(
+        host=os.environ.get('sgt_host', '0.0.0.0'),
+        port=int(os.environ.get('sgt_port', '6006')),
+        debug=os.environ.get('sgt_debug', default='false').lower() in {'true', 'on'}
+    )
 
 
 if __name__ == '__main__':
