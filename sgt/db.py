@@ -13,10 +13,11 @@
 import contextlib
 from typing import *
 import os
+import sgt.config as sgt_config
 import pymongo
 import gridfs
 
-client = pymongo.MongoClient(os.environ['mongodb_database_url'])
+client = pymongo.MongoClient(sgt_config.mongodb_database_url)
 
 
 def connect_to_database():
@@ -36,11 +37,13 @@ def get_grid_fs():
 def get_collection(name):
     return connect_to_database().get_collection(name)
 
+
 @contextlib.contextmanager
 def start_transaction():
     with client.start_session() as session:
         with session.start_transaction():
             yield session
+
 
 def initialize_database():
     db = connect_to_database()

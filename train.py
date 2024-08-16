@@ -12,19 +12,12 @@
 """
 from __future__ import unicode_literals, print_function, division
 
-import os
-if os.path.isfile('./sgt.env'):
-    import dotenv
-    dotenv.load_dotenv('./sgt.env')
-
-import logging
-
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
-)
 
 def main():
+    import sgt.config as sgt_config
+    import sgt.db
+
+    sgt.db.initialize_database()
     import sgt.train
 
     sgt.train.main()

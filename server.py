@@ -12,20 +12,12 @@
 """
 from __future__ import unicode_literals, print_function, division
 
-import os
-if os.path.isfile('./sgt.env'):
-    import dotenv
-    dotenv.load_dotenv('./sgt.env')
-
-import logging
-
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
-)
-
 
 def main():
+    import sgt.config as sgt_config
+    import sgt.db
+
+    sgt.db.initialize_database()
     from flask import Flask
     import sgt.flask_bp
 
@@ -36,11 +28,8 @@ def main():
     ]
     for bp in bps:
         app.register_blueprint(bp, url_prefix="/{}".format(bp.name))
-    app.run(
-        host=os.environ.get('sgt_host', '0.0.0.0'),
-        port=int(os.environ.get('sgt_port', '6006')),
-        debug=os.environ.get('sgt_debug', default='false').lower() in {'true', 'on'}
-    )
+
+    app.run(host=sgt_config.host, port=sgt_config.port, debug=sgt_config.is_debug)
 
 
 if __name__ == '__main__':
