@@ -11,6 +11,3 @@
 
 """
 from __future__ import unicode_literals, print_function, division
-import sgt.db
-
-sgt.db.initialize_database()

@@ -26,7 +26,8 @@ from torch.utils.data import DataLoader, TensorDataset
 
 import sgt.models as sgt_models
 from sgt.db import get_grid_fs_bucket, get_collection
-from sgt.config import fs
+from sgt.config import fs, device
+import sgt.config as sgt_config
 from sgt.lock import MongoLock, MongoLockException
 
 train_step = 64 * 4 * 8
@@ -35,10 +36,12 @@ save_interval = 64 * 4
 success_sleep_seconds = 0.1
 default_sleep_seconds = 0.05
 fail_sleep_seconds = 0.3
-is_cat_do_time = True
+is_cat_do_time = sgt_config.is_debug
 
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-# device = torch.device('cpu')
+if sgt_config.device is None:
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+else:
+    device = torch.device(sgt_config.device)
 
 logger = logging.getLogger(name=__name__)
 logger.setLevel(logging.INFO)

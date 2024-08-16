@@ -25,7 +25,7 @@ import torch
 import sgt.models as sgt_models
 
 from sgt.db import get_collection
-from sgt.config import fs
+from sgt.config import fs, key
 
 
 bp = Blueprint('sgt', __name__)
@@ -52,9 +52,6 @@ def try_exception(e: Exception):
 
 
 class AuthException(KnowException): pass
-
-
-key = os.getenv('sgtone_key', default='test_sgtone_key')
 
 
 def check_auth() -> AnyStr:
